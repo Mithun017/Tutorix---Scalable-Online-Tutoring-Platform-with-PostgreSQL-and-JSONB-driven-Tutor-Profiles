@@ -9,10 +9,12 @@ echo.
 
 :: Configuration
 SET DB_NAME=Tutorix
-SET DB_USER=Mithun1701
+SET DB_USER=postgres
+SET PGPASSWORD=Mithun1701
 
 echo [INFO] Target Database: %DB_NAME%
-echo [INFO] User Credentials: %DB_USER%
+echo [INFO] User: %DB_USER%
+echo [INFO] Password: [Protected]
 echo.
 
 :: Check for psql
