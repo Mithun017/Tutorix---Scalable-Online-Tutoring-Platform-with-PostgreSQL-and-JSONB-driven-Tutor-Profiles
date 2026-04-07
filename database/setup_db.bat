@@ -8,10 +8,10 @@ echo ==========================================
 echo.
 
 :: Configuration
-SET "DATABASE_URL=postgresql://postgres:Mithun1701@localhost:5432/hope_db"
+SET "DATABASE_URL=postgresql://postgres:Mithun1701@localhost:5432/Tutorix"
 
-echo [INFO] Connecting to: hope_db
-echo [INFO] Connection String: postgresql://postgres:***@localhost:5432/hope_db
+echo [INFO] Connecting to: Tutorix
+echo [INFO] Connection String: postgresql://postgres:***@localhost:5432/Tutorix
 echo.
 
 :: Search for psql.exe in common installation directories if not in PATH
