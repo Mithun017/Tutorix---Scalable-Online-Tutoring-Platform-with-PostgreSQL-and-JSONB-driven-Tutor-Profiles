@@ -34,12 +34,17 @@ The easiest way to get the project running on Windows is using the provided auto
 
 ## 🛠️ Manual Setup Instructions
 
-### 1. Database Setup (Optional/Theoretical)
-This project is designed to run with a real PostgreSQL 14+ database. While the UI currently uses mock data for demonstration, the schema is production-ready.
+### 1. Database Setup (PostgreSQL)
+We've provided a dedicated script to apply the schema and sample data using your credentials:
 
-- **Create Database**: `CREATE DATABASE tutorix;`
-- **Apply Schema**: `psql -d tutorix -f database/schema.sql`
-- **Seed Data**: `psql -d tutorix -f database/seed.sql`
+1. Open the `database` folder.
+2. Double-click **`setup_db.bat`**.
+3. It will automatically run:
+   - `psql -U Mithun1701 -d Tutorix -f schema.sql`
+   - `psql -U Mithun1701 -d Tutorix -f seed.sql`
+
+> [!NOTE]
+> Ensure you have created the `Tutorix` database in pgAdmin or via `CREATE DATABASE Tutorix;` before running the script.
 
 > [!IMPORTANT]
 > The database uses the `btree_gist` extension for its unique **Exclusion Constraints**. This prevents any tutor from being double-booked for the same time slot at the database level.
