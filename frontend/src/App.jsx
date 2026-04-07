@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TUTORS, SUBJECTS, SESSIONS, REVIEWS, STATS } from './mockData';
+import { TUTORS, SUBJECTS, SESSIONS, REVIEWS, STATS, PAYMENTS } from './mockData';
 
 const App = () => {
   const [page, setPage] = useState('listing');
@@ -346,65 +346,181 @@ const App = () => {
   // ===== DASHBOARD =====
   const DashboardPage = () => {
     const completedCount = sessions.filter(s => s.status === 'completed').length;
-    const upcomingCount = sessions.filter(s => s.status === 'confirmed' || s.status === 'pending').length;
+    const confirmedCount = sessions.filter(s => s.status === 'confirmed').length;
+    const pendingCount = sessions.filter(s => s.status === 'pending').length;
     const totalSpent = sessions.reduce((acc, s) => {
       const tutor = TUTORS.find(t => t.id === s.tutor_id);
       return acc + (tutor?.hourly_rate || 0);
     }, 0);
+    const paidAmount = PAYMENTS.filter(p => p.status === 'paid').reduce((a, p) => a + p.amount, 0);
+    const pendingAmount = PAYMENTS.filter(p => p.status === 'pending').reduce((a, p) => a + p.amount, 0);
+
+    // Unique tutors booked
+    const uniqueTutors = [...new Set(sessions.map(s => s.tutor_id))];
+    // Subject breakdown
+    const subjectCounts = {};
+    sessions.forEach(s => {
+      const name = getSubjectName(s.subject_id);
+      subjectCounts[name] = (subjectCounts[name] || 0) + 1;
+    });
+
+    // Recent reviews by user
+    const myReviews = reviews.filter(r => r.author === 'You');
 
     return (
       <div className="animate-in">
         <div className="dashboard-header">
           <h2>📊 Student Dashboard</h2>
+          <button className="btn btn-primary" onClick={() => setPage('listing')}>+ Book New Session</button>
         </div>
 
-        <div className="dashboard-stats">
+        {/* 6 Stat Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
           <div className="dash-stat">
-            <div className="dash-stat-label">Completed Sessions</div>
+            <div className="dash-stat-label">Total Sessions</div>
+            <div className="dash-stat-value">{sessions.length}</div>
+          </div>
+          <div className="dash-stat">
+            <div className="dash-stat-label">Completed</div>
             <div className="dash-stat-value" style={{ color: 'var(--accent)' }}>{completedCount}</div>
           </div>
           <div className="dash-stat">
-            <div className="dash-stat-label">Upcoming Sessions</div>
-            <div className="dash-stat-value" style={{ color: 'var(--primary-light)' }}>{upcomingCount}</div>
+            <div className="dash-stat-label">Confirmed</div>
+            <div className="dash-stat-value" style={{ color: 'var(--primary-light)' }}>{confirmedCount}</div>
           </div>
           <div className="dash-stat">
-            <div className="dash-stat-label">Total Spent</div>
-            <div className="dash-stat-value">₹{totalSpent.toLocaleString('en-IN')}</div>
+            <div className="dash-stat-label">Pending</div>
+            <div className="dash-stat-value" style={{ color: 'var(--warning)' }}>{pendingCount}</div>
+          </div>
+          <div className="dash-stat">
+            <div className="dash-stat-label">Total Paid</div>
+            <div className="dash-stat-value" style={{ color: 'var(--accent)' }}>₹{paidAmount.toLocaleString('en-IN')}</div>
+          </div>
+          <div className="dash-stat">
+            <div className="dash-stat-label">Pending Payment</div>
+            <div className="dash-stat-value" style={{ color: 'var(--warning)' }}>₹{pendingAmount.toLocaleString('en-IN')}</div>
           </div>
         </div>
 
-        <h3 className="section-title" style={{ marginBottom: '1rem' }}>Your Sessions</h3>
-        <table className="sessions-table">
-          <thead>
-            <tr>
-              <th>Tutor</th>
-              <th>Subject</th>
-              <th>Date</th>
-              <th>Time (IST)</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sessions.map(s => (
-              <tr key={s.id}>
-                <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{getTutorName(s.tutor_id)}</td>
-                <td>{getSubjectIcon(s.subject_id)} {getSubjectName(s.subject_id)}</td>
-                <td>{s.date}</td>
-                <td>{s.start_time} – {s.end_time}</td>
-                <td><span className={`status-badge status-${s.status}`}>{s.status}</span></td>
-                <td>
-                  {s.status === 'completed' && (
-                    <button className="btn btn-ghost" onClick={() => {
-                      setSelectedTutor(TUTORS.find(t => t.id === s.tutor_id));
-                      setPage('review');
-                    }}>Write Review</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {/* Two Column Layout: Sessions + Side panels */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '1.5rem' }}>
+          {/* Left: Sessions Table */}
+          <div>
+            <h3 className="section-title" style={{ marginBottom: '1rem' }}>📋 Session History ({sessions.length})</h3>
+            <table className="sessions-table">
+              <thead>
+                <tr>
+                  <th>Tutor</th>
+                  <th>Subject</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...sessions].sort((a, b) => b.date.localeCompare(a.date)).map(s => (
+                  <tr key={s.id}>
+                    <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{getTutorName(s.tutor_id)}</td>
+                    <td>{getSubjectIcon(s.subject_id)} {getSubjectName(s.subject_id)}</td>
+                    <td>{s.date}</td>
+                    <td>{s.start_time} – {s.end_time}</td>
+                    <td><span className={`status-badge status-${s.status}`}>{s.status}</span></td>
+                    <td>
+                      {s.status === 'completed' && (
+                        <button className="btn btn-ghost" onClick={() => {
+                          setSelectedTutor(TUTORS.find(t => t.id === s.tutor_id));
+                          setPage('review');
+                        }}>Review</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Right: Side Panels */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            {/* Tutors You Learn From */}
+            <div className="sidebar-card">
+              <h3>👩‍🏫 Your Tutors ({uniqueTutors.length})</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {uniqueTutors.map(tid => {
+                  const t = TUTORS.find(x => x.id === tid);
+                  if (!t) return null;
+                  return (
+                    <div key={tid} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', borderRadius: 'var(--radius-md)', cursor: 'pointer', transition: 'background 0.2s' }}
+                      onClick={() => { setSelectedTutor(t); setPage('profile'); }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <div className="tutor-avatar" style={{ width: 36, height: 36, fontSize: '0.75rem', borderRadius: 'var(--radius-sm)' }}>{t.avatar}</div>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{t.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>★ {t.rating} · ₹{t.hourly_rate.toLocaleString('en-IN')}/hr</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Subject Breakdown */}
+            <div className="sidebar-card">
+              <h3>📚 Subject Breakdown</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {Object.entries(subjectCounts).sort((a, b) => b[1] - a[1]).map(([name, count]) => {
+                  const sub = SUBJECTS.find(s => s.name === name);
+                  const maxCount = Math.max(...Object.values(subjectCounts));
+                  return (
+                    <div key={name}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
+                        <span>{sub?.icon} {name}</span>
+                        <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{count} sessions</span>
+                      </div>
+                      <div style={{ height: 6, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ width: `${(count / maxCount) * 100}%`, height: '100%', background: 'var(--gradient-accent)', borderRadius: 99, transition: 'width 0.5s ease' }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Payment History */}
+            <div className="sidebar-card">
+              <h3>💳 Recent Payments</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {PAYMENTS.slice(0, 6).map(p => (
+                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                    <div>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 500 }}>₹{p.amount.toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.date}</div>
+                    </div>
+                    <span className={`status-badge ${p.status === 'paid' ? 'status-completed' : 'status-pending'}`}>{p.status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* My Reviews */}
+            {myReviews.length > 0 && (
+              <div className="sidebar-card">
+                <h3>✍️ Your Reviews ({myReviews.length})</h3>
+                {myReviews.map(r => (
+                  <div key={r.id} className="review-card" style={{ marginBottom: '0.5rem' }}>
+                    <div className="review-header">
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{getTutorName(r.tutor_id)}</span>
+                      <span className="review-stars">{'★'.repeat(r.rating)}</span>
+                    </div>
+                    <p className="review-text" style={{ fontSize: '0.82rem' }}>{r.comment}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
