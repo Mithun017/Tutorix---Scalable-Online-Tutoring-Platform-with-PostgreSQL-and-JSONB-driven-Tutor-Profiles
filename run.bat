@@ -31,6 +31,9 @@ echo [INFO] Starting the Frontend Development Server...
 echo [INFO] Access the application at http://localhost:5173
 echo.
 
+:: Automatically open browser
+start http://localhost:5173
+
 :: Run dev server
 cmd /c npm run dev
 
