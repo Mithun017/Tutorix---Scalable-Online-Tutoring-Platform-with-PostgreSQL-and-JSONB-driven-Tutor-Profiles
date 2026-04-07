@@ -13,7 +13,7 @@ const App = () => {
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
 
   const getSubjectName = (id) => SUBJECTS.find(s => s.id === id)?.name || '';
@@ -21,18 +21,17 @@ const App = () => {
   const getTutorName = (id) => TUTORS.find(t => t.id === id)?.name || '';
 
   const filteredTutors = TUTORS.filter(tutor => {
+    const q = search.toLowerCase();
     const matchesSearch = !search ||
-      tutor.name.toLowerCase().includes(search.toLowerCase()) ||
-      tutor.profile.bio.toLowerCase().includes(search.toLowerCase()) ||
-      tutor.profile.languages.some(l => l.toLowerCase().includes(search.toLowerCase())) ||
-      tutor.subjects.some(sid => getSubjectName(sid).toLowerCase().includes(search.toLowerCase()));
-
+      tutor.name.toLowerCase().includes(q) ||
+      tutor.profile.bio.toLowerCase().includes(q) ||
+      tutor.profile.languages.some(l => l.toLowerCase().includes(q)) ||
+      tutor.subjects.some(sid => getSubjectName(sid).toLowerCase().includes(q));
     const matchesSubject = subjectFilter === 'all' || tutor.subjects.includes(subjectFilter);
-
     return matchesSearch && matchesSubject;
   });
 
-  const tutorReviews = (tutorId) => reviews.filter(r => r.tutor_id === tutorId);
+  const tutorReviews = (tid) => reviews.filter(r => r.tutor_id === tid);
 
   const handleBooking = (e) => {
     e.preventDefault();
@@ -55,17 +54,21 @@ const App = () => {
     );
 
     if (conflict) {
-      showToast('⚠️ Tutor already booked for this slot! (EXCLUDE constraint)', 'error');
+      showToast('⚠️ This tutor is already booked for this slot! (EXCLUDE constraint triggered)', 'error');
       return;
     }
 
     setSessions([...sessions, newSession]);
-    showToast('✅ Session booked successfully!');
+    showToast('✅ Session booked successfully! Check your dashboard.');
     setPage('dashboard');
   };
 
   const handleReview = (e) => {
     e.preventDefault();
+    if (reviewRating === 0) {
+      showToast('⚠️ Please select a rating before submitting.', 'error');
+      return;
+    }
     const fd = new FormData(e.target);
     setReviews([...reviews, {
       id: `r-${Date.now()}`,
@@ -75,7 +78,7 @@ const App = () => {
       comment: fd.get('comment'),
       author: 'You'
     }]);
-    showToast('✅ Review submitted!');
+    showToast('✅ Review submitted! Thank you for your feedback.');
     setReviewRating(0);
     setPage('dashboard');
   };
@@ -83,18 +86,18 @@ const App = () => {
   // ===== NAVBAR =====
   const Navbar = () => (
     <nav className="navbar">
-      <div className="navbar-brand" onClick={() => setPage('listing')} style={{ cursor: 'pointer' }}>
+      <div className="navbar-brand" onClick={() => setPage('listing')}>
         <div className="navbar-logo">T</div>
         <span className="navbar-title">Tutorix</span>
       </div>
       <div className="nav-links">
         {[
-          { key: 'listing', label: '🔍 Browse' },
-          { key: 'dashboard', label: '📊 Dashboard' }
+          { key: 'listing', label: '🔍 Browse Tutors' },
+          { key: 'dashboard', label: '📊 My Dashboard' }
         ].map(item => (
           <button
             key={item.key}
-            className={`nav-link ${page === item.key ? 'active' : ''}`}
+            className={`nav-link ${page === item.key || (page === 'profile' && item.key === 'listing') || (page === 'book' && item.key === 'listing') ? 'active' : ''}`}
             onClick={() => setPage(item.key)}
           >
             {item.label}
@@ -109,10 +112,10 @@ const App = () => {
     <section className="hero animate-in">
       <div className="hero-badge">
         <span className="dot"></span>
-        Platform powered by PostgreSQL JSONB
+        Powered by PostgreSQL JSONB · 🇮🇳 Made in India
       </div>
       <h2>Find Your Perfect <span>Tutor</span></h2>
-      <p>Connect with world-class educators. Book sessions, track progress, and achieve your learning goals.</p>
+      <p>Connect with India's top educators for JEE, NEET, CA, GATE, and board exam preparation. Book sessions, track progress, and achieve your dreams.</p>
     </section>
   );
 
@@ -121,9 +124,9 @@ const App = () => {
     <div className="stats-bar animate-in animate-in-delay-1">
       {[
         { value: `${STATS.totalTutors}+`, label: 'Expert Tutors' },
-        { value: `${STATS.totalStudents.toLocaleString()}+`, label: 'Active Students' },
-        { value: `${(STATS.totalSessions / 1000).toFixed(1)}K`, label: 'Sessions Completed' },
-        { value: STATS.avgRating, label: 'Average Rating' }
+        { value: `${(STATS.totalStudents / 1000).toFixed(1)}K+`, label: 'Active Students' },
+        { value: `${(STATS.totalSessions / 1000).toFixed(0)}K+`, label: 'Sessions Completed' },
+        { value: `⭐ ${STATS.avgRating}`, label: 'Average Rating' }
       ].map((stat, i) => (
         <div key={i} className="stat-card">
           <div className="stat-value">{stat.value}</div>
@@ -145,22 +148,17 @@ const App = () => {
           <input
             type="text"
             className="search-input"
-            placeholder="Search by tutor name, subject, or language..."
+            placeholder="Search by tutor, subject, or language (e.g. Tamil, JEE, Physics)..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
         <div className="filter-chips">
-          <button
-            className={`chip ${subjectFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setSubjectFilter('all')}
-          >All</button>
+          <button className={`chip ${subjectFilter === 'all' ? 'active' : ''}`} onClick={() => setSubjectFilter('all')}>All</button>
           {SUBJECTS.map(sub => (
-            <button
-              key={sub.id}
-              className={`chip ${subjectFilter === sub.id ? 'active' : ''}`}
-              onClick={() => setSubjectFilter(sub.id)}
-            >{sub.icon} {sub.name}</button>
+            <button key={sub.id} className={`chip ${subjectFilter === sub.id ? 'active' : ''}`} onClick={() => setSubjectFilter(sub.id)}>
+              {sub.icon} {sub.name}
+            </button>
           ))}
         </div>
       </div>
@@ -180,7 +178,7 @@ const App = () => {
                 <div className="tutor-card-rating">
                   <span className="stars">{'★'.repeat(Math.floor(tutor.rating))}</span>
                   <span className="rating-value">{tutor.rating}</span>
-                  <span className="rating-count">({tutor.total_sessions} sessions)</span>
+                  <span className="rating-count">({tutor.total_sessions.toLocaleString('en-IN')} sessions)</span>
                 </div>
               </div>
             </div>
@@ -194,8 +192,8 @@ const App = () => {
               ))}
             </div>
             <div className="tutor-card-footer">
-              <div className="tutor-price">${tutor.hourly_rate}<span>/hr</span></div>
-              <button className="btn btn-primary" onClick={e => { e.stopPropagation(); setSelectedTutor(tutor); setPage('book'); }}>Book Now</button>
+              <div className="tutor-price">₹{tutor.hourly_rate.toLocaleString('en-IN')}<span>/hr</span></div>
+              <button className="btn btn-primary" onClick={e => { e.stopPropagation(); setSelectedTutor(tutor); setPage('book'); }}>Book Now →</button>
             </div>
           </div>
         ))}
@@ -203,7 +201,7 @@ const App = () => {
     </div>
   );
 
-  // ===== PROFILE PAGE =====
+  // ===== PROFILE =====
   const ProfilePage = () => {
     const t = selectedTutor;
     const tReviews = tutorReviews(t.id);
@@ -217,10 +215,10 @@ const App = () => {
               <div className="profile-avatar">{t.avatar}</div>
               <div className="profile-header-info">
                 <h2>{t.name}</h2>
-                <div className="tutor-card-rating" style={{ fontSize: '1rem' }}>
+                <div className="tutor-card-rating" style={{ fontSize: '0.95rem' }}>
                   <span className="stars">{'★'.repeat(Math.floor(t.rating))}</span>
                   <span className="rating-value">{t.rating}</span>
-                  <span className="rating-count">· {t.total_sessions} sessions</span>
+                  <span className="rating-count">· {t.total_sessions.toLocaleString('en-IN')} sessions</span>
                 </div>
                 <div className="profile-stats-row">
                   <div className="profile-stat">🕒 <strong>{t.profile.experience}</strong> experience</div>
@@ -247,7 +245,7 @@ const App = () => {
             </div>
 
             <div className="profile-section">
-              <h3>Subjects</h3>
+              <h3>Subjects Taught</h3>
               <div className="tutor-card-tags">
                 {t.subjects.map(sid => (
                   <span key={sid} className="tag tag-subject">{getSubjectIcon(sid)} {getSubjectName(sid)}</span>
@@ -273,8 +271,11 @@ const App = () => {
 
           <div className="profile-sidebar">
             <div className="sidebar-card">
-              <div className="price-display">${t.hourly_rate}<span>/hr</span></div>
-              <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: '1rem' }} onClick={() => setPage('book')}>
+              <div className="price-display">₹{t.hourly_rate.toLocaleString('en-IN')}<span>/hr</span></div>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '1rem' }}>
+                GST included · No hidden charges
+              </p>
+              <button className="btn btn-primary btn-full btn-lg" onClick={() => setPage('book')}>
                 📅 Book a Session
               </button>
             </div>
@@ -298,13 +299,13 @@ const App = () => {
     );
   };
 
-  // ===== BOOKING FORM =====
+  // ===== BOOKING =====
   const BookingPage = () => (
     <div className="animate-in">
       <div className="back-link" onClick={() => setPage(selectedTutor ? 'profile' : 'listing')}>← Back</div>
       <div className="form-container">
         <h2>Book a Session</h2>
-        <p className="form-subtitle">with {selectedTutor.name} · ${selectedTutor.hourly_rate}/hr</p>
+        <p className="form-subtitle">with {selectedTutor.name} · ₹{selectedTutor.hourly_rate.toLocaleString('en-IN')}/hr</p>
         <form onSubmit={handleBooking}>
           <div className="form-group">
             <label className="form-label">Subject</label>
@@ -315,22 +316,27 @@ const App = () => {
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Date</label>
+            <label className="form-label">Preferred Date</label>
             <input type="date" name="date" className="form-input" required min="2026-04-01" />
           </div>
           <div className="form-group">
-            <label className="form-label">Time Slot</label>
+            <label className="form-label">Time Slot (IST)</label>
             <select name="time" className="form-select" required>
+              <option value="07:00-08:00">07:00 AM – 08:00 AM</option>
+              <option value="08:00-09:00">08:00 AM – 09:00 AM</option>
               <option value="09:00-10:00">09:00 AM – 10:00 AM</option>
               <option value="10:00-11:00">10:00 AM – 11:00 AM</option>
               <option value="11:00-12:00">11:00 AM – 12:00 PM</option>
               <option value="14:00-15:00">02:00 PM – 03:00 PM</option>
-              <option value="15:00-16:00">03:00 PM – 04:00 PM</option>
               <option value="16:00-17:00">04:00 PM – 05:00 PM</option>
               <option value="18:00-19:00">06:00 PM – 07:00 PM</option>
+              <option value="19:00-20:00">07:00 PM – 08:00 PM</option>
             </select>
           </div>
-          <button type="submit" className="btn btn-primary btn-full btn-lg" style={{ marginTop: '0.5rem' }}>Confirm Booking</button>
+          <div style={{ padding: '1rem', background: 'rgba(23, 234, 217, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(23, 234, 217, 0.1)', marginBottom: '1.25rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            💡 <strong>Session Cost:</strong> ₹{selectedTutor.hourly_rate.toLocaleString('en-IN')} (1 hour) · Payment after session
+          </div>
+          <button type="submit" className="btn btn-primary btn-full btn-lg">Confirm Booking →</button>
           <button type="button" className="btn btn-secondary btn-full" style={{ marginTop: '0.75rem' }} onClick={() => setPage('listing')}>Cancel</button>
         </form>
       </div>
@@ -349,21 +355,21 @@ const App = () => {
     return (
       <div className="animate-in">
         <div className="dashboard-header">
-          <h2>Student Dashboard</h2>
+          <h2>📊 Student Dashboard</h2>
         </div>
 
         <div className="dashboard-stats">
           <div className="dash-stat">
             <div className="dash-stat-label">Completed Sessions</div>
-            <div className="dash-stat-value" style={{ color: '#34d399' }}>{completedCount}</div>
+            <div className="dash-stat-value" style={{ color: 'var(--accent)' }}>{completedCount}</div>
           </div>
           <div className="dash-stat">
             <div className="dash-stat-label">Upcoming Sessions</div>
-            <div className="dash-stat-value" style={{ color: '#818cf8' }}>{upcomingCount}</div>
+            <div className="dash-stat-value" style={{ color: 'var(--primary-light)' }}>{upcomingCount}</div>
           </div>
           <div className="dash-stat">
             <div className="dash-stat-label">Total Spent</div>
-            <div className="dash-stat-value">${totalSpent.toFixed(2)}</div>
+            <div className="dash-stat-value">₹{totalSpent.toLocaleString('en-IN')}</div>
           </div>
         </div>
 
@@ -374,7 +380,7 @@ const App = () => {
               <th>Tutor</th>
               <th>Subject</th>
               <th>Date</th>
-              <th>Time</th>
+              <th>Time (IST)</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
@@ -386,9 +392,7 @@ const App = () => {
                 <td>{getSubjectIcon(s.subject_id)} {getSubjectName(s.subject_id)}</td>
                 <td>{s.date}</td>
                 <td>{s.start_time} – {s.end_time}</td>
-                <td>
-                  <span className={`status-badge status-${s.status}`}>{s.status}</span>
-                </td>
+                <td><span className={`status-badge status-${s.status}`}>{s.status}</span></td>
                 <td>
                   {s.status === 'completed' && (
                     <button className="btn btn-ghost" onClick={() => {
@@ -405,12 +409,12 @@ const App = () => {
     );
   };
 
-  // ===== REVIEW FORM =====
+  // ===== REVIEW =====
   const ReviewPage = () => (
     <div className="animate-in">
       <div className="back-link" onClick={() => setPage('dashboard')}>← Back to Dashboard</div>
       <div className="form-container">
-        <h2>Rate Your Session</h2>
+        <h2>⭐ Rate Your Session</h2>
         <p className="form-subtitle">with {selectedTutor.name}</p>
         <form onSubmit={handleReview}>
           <input type="hidden" name="session_id" value="s-1" />
@@ -418,9 +422,7 @@ const App = () => {
             <label className="form-label">Your Rating</label>
             <div className="star-rating-input">
               {[1, 2, 3, 4, 5].map(star => (
-                <button
-                  key={star}
-                  type="button"
+                <button key={star} type="button"
                   className={`star-btn ${star <= reviewRating ? 'active' : ''}`}
                   onClick={() => setReviewRating(star)}
                 >★</button>
@@ -429,9 +431,9 @@ const App = () => {
           </div>
           <div className="form-group">
             <label className="form-label">Your Feedback</label>
-            <textarea name="comment" className="form-textarea" placeholder="Share your experience with this tutor..." required />
+            <textarea name="comment" className="form-textarea" placeholder="How was your experience? Share your honest feedback..." required />
           </div>
-          <button type="submit" className="btn btn-primary btn-full btn-lg" style={{ marginTop: '0.5rem' }}>Submit Review</button>
+          <button type="submit" className="btn btn-primary btn-full btn-lg">Submit Review →</button>
         </form>
       </div>
     </div>
@@ -449,12 +451,10 @@ const App = () => {
         {page === 'review' && selectedTutor && <ReviewPage />}
       </main>
       <footer className="footer">
-        &copy; 2026 Tutorix · Powered by PostgreSQL JSONB & React
+        &copy; 2026 Tutorix · Powered by PostgreSQL JSONB & React · 🇮🇳 Made in India
       </footer>
       {toast && (
-        <div className={`toast toast-${toast.type}`}>
-          {toast.message}
-        </div>
+        <div className={`toast toast-${toast.type}`}>{toast.message}</div>
       )}
     </div>
   );
