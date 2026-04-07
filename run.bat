@@ -31,6 +31,9 @@ echo [INFO] Starting the Frontend Development Server...
 echo [INFO] Access the application at http://localhost:5173
 echo.
 
+:: Wait for server to start (3 seconds)
+timeout /t 3 /nobreak >nul
+
 :: Automatically open browser
 start http://localhost:5173
 
