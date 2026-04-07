@@ -1,108 +1,201 @@
-import React, { useState, useEffect } from 'react';
-import { TUTORS, SUBJECTS, SESSIONS, REVIEWS } from './mockData';
+import React, { useState } from 'react';
+import { TUTORS, SUBJECTS, SESSIONS, REVIEWS, STATS } from './mockData';
 
 const App = () => {
-  const [currentPage, setCurrentPage] = useState('listing'); // listing, profile, book, dashboard, review
+  const [page, setPage] = useState('listing');
   const [selectedTutor, setSelectedTutor] = useState(null);
   const [sessions, setSessions] = useState(SESSIONS);
   const [reviews, setReviews] = useState(REVIEWS);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [search, setSearch] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('all');
+  const [toast, setToast] = useState(null);
+  const [reviewRating, setReviewRating] = useState(0);
 
-  // Simulation: Filter tutors by JSONB-like properties
-  const filteredTutors = TUTORS.filter(tutor => 
-    tutor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    tutor.profile.bio.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    tutor.subjects.some(sid => 
-      SUBJECTS.find(s => s.id === sid).name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  );
-
-  const navigateToProfile = (tutor) => {
-    setSelectedTutor(tutor);
-    setCurrentPage('profile');
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   };
 
-  const navigateToBooking = (tutor) => {
-    setSelectedTutor(tutor);
-    setCurrentPage('book');
-  };
+  const getSubjectName = (id) => SUBJECTS.find(s => s.id === id)?.name || '';
+  const getSubjectIcon = (id) => SUBJECTS.find(s => s.id === id)?.icon || '';
+  const getTutorName = (id) => TUTORS.find(t => t.id === id)?.name || '';
+
+  const filteredTutors = TUTORS.filter(tutor => {
+    const matchesSearch = !search ||
+      tutor.name.toLowerCase().includes(search.toLowerCase()) ||
+      tutor.profile.bio.toLowerCase().includes(search.toLowerCase()) ||
+      tutor.profile.languages.some(l => l.toLowerCase().includes(search.toLowerCase())) ||
+      tutor.subjects.some(sid => getSubjectName(sid).toLowerCase().includes(search.toLowerCase()));
+
+    const matchesSubject = subjectFilter === 'all' || tutor.subjects.includes(subjectFilter);
+
+    return matchesSearch && matchesSubject;
+  });
+
+  const tutorReviews = (tutorId) => reviews.filter(r => r.tutor_id === tutorId);
 
   const handleBooking = (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
+    const fd = new FormData(e.target);
     const newSession = {
-      id: `s-${sessions.length + 1}`,
+      id: `s-${Date.now()}`,
       tutor_id: selectedTutor.id,
       student_id: 'st-1',
-      subject_id: formData.get('subject'),
-      time_range: `${formData.get('date')} ${formData.get('time')}`,
+      subject_id: fd.get('subject'),
+      date: fd.get('date'),
+      start_time: fd.get('time').split('-')[0],
+      end_time: fd.get('time').split('-')[1],
       status: 'pending'
     };
-    
-    // Check for conflict (Simulating EXCLUDE constraint)
-    const hasConflict = sessions.some(s => 
-      s.tutor_id === newSession.tutor_id && s.time_range === newSession.time_range
+
+    const conflict = sessions.some(s =>
+      s.tutor_id === newSession.tutor_id &&
+      s.date === newSession.date &&
+      s.start_time === newSession.start_time
     );
 
-    if (hasConflict) {
-      alert('Tutor already booked for this time range! (Exclusion Constraint Triggered)');
+    if (conflict) {
+      showToast('⚠️ Tutor already booked for this slot! (EXCLUDE constraint)', 'error');
       return;
     }
 
     setSessions([...sessions, newSession]);
-    setCurrentPage('dashboard');
+    showToast('✅ Session booked successfully!');
+    setPage('dashboard');
   };
 
   const handleReview = (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    const newReview = {
-      id: `r-${reviews.length + 1}`,
-      session_id: formData.get('session_id'),
-      rating: parseInt(formData.get('rating')),
-      comment: formData.get('comment')
-    };
-    setReviews([...reviews, newReview]);
-    setCurrentPage('dashboard');
+    const fd = new FormData(e.target);
+    setReviews([...reviews, {
+      id: `r-${Date.now()}`,
+      session_id: fd.get('session_id'),
+      tutor_id: selectedTutor.id,
+      rating: reviewRating,
+      comment: fd.get('comment'),
+      author: 'You'
+    }]);
+    showToast('✅ Review submitted!');
+    setReviewRating(0);
+    setPage('dashboard');
   };
 
-  const renderNavbar = () => (
-    <nav>
-      <h1>Tutorix</h1>
+  // ===== NAVBAR =====
+  const Navbar = () => (
+    <nav className="navbar">
+      <div className="navbar-brand" onClick={() => setPage('listing')} style={{ cursor: 'pointer' }}>
+        <div className="navbar-logo">T</div>
+        <span className="navbar-title">Tutorix</span>
+      </div>
       <div className="nav-links">
-        <a className={currentPage === 'listing' ? 'active' : ''} onClick={() => setCurrentPage('listing')}>Browse Tutors</a>
-        <a className={currentPage === 'dashboard' ? 'active' : ''} onClick={() => setCurrentPage('dashboard')}>My Dashboard</a>
+        {[
+          { key: 'listing', label: '🔍 Browse' },
+          { key: 'dashboard', label: '📊 Dashboard' }
+        ].map(item => (
+          <button
+            key={item.key}
+            className={`nav-link ${page === item.key ? 'active' : ''}`}
+            onClick={() => setPage(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
     </nav>
   );
 
-  const renderListing = () => (
-    <div className="animate-fade">
-      <div style={{ marginBottom: '2rem' }}>
-        <input 
-          type="text" 
-          placeholder="Search subjects, skills, or tutor names..." 
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ width: '100%', maxWidth: '600px' }}
-        />
+  // ===== HERO =====
+  const Hero = () => (
+    <section className="hero animate-in">
+      <div className="hero-badge">
+        <span className="dot"></span>
+        Platform powered by PostgreSQL JSONB
       </div>
+      <h2>Find Your Perfect <span>Tutor</span></h2>
+      <p>Connect with world-class educators. Book sessions, track progress, and achieve your learning goals.</p>
+    </section>
+  );
+
+  // ===== STATS =====
+  const StatsBar = () => (
+    <div className="stats-bar animate-in animate-in-delay-1">
+      {[
+        { value: `${STATS.totalTutors}+`, label: 'Expert Tutors' },
+        { value: `${STATS.totalStudents.toLocaleString()}+`, label: 'Active Students' },
+        { value: `${(STATS.totalSessions / 1000).toFixed(1)}K`, label: 'Sessions Completed' },
+        { value: STATS.avgRating, label: 'Average Rating' }
+      ].map((stat, i) => (
+        <div key={i} className="stat-card">
+          <div className="stat-value">{stat.value}</div>
+          <div className="stat-label">{stat.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ===== LISTING PAGE =====
+  const ListingPage = () => (
+    <div className="animate-in">
+      <Hero />
+      <StatsBar />
+
+      <div className="search-section animate-in animate-in-delay-2">
+        <div className="search-input-wrapper">
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Search by tutor name, subject, or language..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="filter-chips">
+          <button
+            className={`chip ${subjectFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setSubjectFilter('all')}
+          >All</button>
+          {SUBJECTS.map(sub => (
+            <button
+              key={sub.id}
+              className={`chip ${subjectFilter === sub.id ? 'active' : ''}`}
+              onClick={() => setSubjectFilter(sub.id)}
+            >{sub.icon} {sub.name}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="section-header animate-in animate-in-delay-3">
+        <h2 className="section-title">Available Tutors</h2>
+        <span className="section-count">{filteredTutors.length} tutors found</span>
+      </div>
+
       <div className="tutor-grid">
         {filteredTutors.map(tutor => (
-          <div key={tutor.id} className="card" onClick={() => navigateToProfile(tutor)}>
-            <h3>{tutor.name}</h3>
-            <div className="rating">★ {tutor.rating}</div>
-            <div className="tags">
+          <div key={tutor.id} className="tutor-card" onClick={() => { setSelectedTutor(tutor); setPage('profile'); }}>
+            <div className="tutor-card-header">
+              <div className="tutor-avatar">{tutor.avatar}</div>
+              <div className="tutor-card-meta">
+                <h3>{tutor.name}</h3>
+                <div className="tutor-card-rating">
+                  <span className="stars">{'★'.repeat(Math.floor(tutor.rating))}</span>
+                  <span className="rating-value">{tutor.rating}</span>
+                  <span className="rating-count">({tutor.total_sessions} sessions)</span>
+                </div>
+              </div>
+            </div>
+            <p className="tutor-card-bio">{tutor.profile.bio}</p>
+            <div className="tutor-card-tags">
               {tutor.subjects.map(sid => (
-                <span key={sid} className="tag">{SUBJECTS.find(s => s.id === sid).name}</span>
+                <span key={sid} className="tag tag-subject">{getSubjectIcon(sid)} {getSubjectName(sid)}</span>
+              ))}
+              {tutor.profile.languages.map(l => (
+                <span key={l} className="tag tag-language">{l}</span>
               ))}
             </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              {tutor.profile.bio.substring(0, 100)}...
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="price">${tutor.hourly_rate}/hr</span>
-              <button className="btn" style={{ width: 'auto', padding: '0.5rem 1rem' }} onClick={(e) => { e.stopPropagation(); navigateToBooking(tutor); }}>Book Now</button>
+            <div className="tutor-card-footer">
+              <div className="tutor-price">${tutor.hourly_rate}<span>/hr</span></div>
+              <button className="btn btn-primary" onClick={e => { e.stopPropagation(); setSelectedTutor(tutor); setPage('book'); }}>Book Now</button>
             </div>
           </div>
         ))}
@@ -110,156 +203,259 @@ const App = () => {
     </div>
   );
 
-  const renderProfile = () => (
-    <div className="animate-fade">
-      <button className="btn" style={{ width: 'auto', background: 'transparent', marginBottom: '2rem' }} onClick={() => setCurrentPage('listing')}>← Back to Listing</button>
-      <div className="profile-hero card" style={{ cursor: 'default' }}>
-        <div className="profile-info">
-          <h2>{selectedTutor.name}</h2>
-          <div className="rating" style={{ fontSize: '1.5rem' }}>★ {selectedTutor.rating}</div>
-          <p style={{ marginBottom: '1.5rem' }}>{selectedTutor.profile.bio}</p>
-          
-          <h4>Qualifications</h4>
-          <ul style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', paddingLeft: '1.5rem' }}>
-            {selectedTutor.profile.qualifications.map((q, i) => <li key={i}>{q}</li>)}
-          </ul>
+  // ===== PROFILE PAGE =====
+  const ProfilePage = () => {
+    const t = selectedTutor;
+    const tReviews = tutorReviews(t.id);
+    return (
+      <div className="animate-in">
+        <div className="back-link" onClick={() => setPage('listing')}>← Back to Browse</div>
 
-          <h4>Languages</h4>
-          <div className="tags">
-            {selectedTutor.profile.languages.map(l => <span key={l} className="tag">{l}</span>)}
-          </div>
-        </div>
-        
-        <div className="booking-sidebar">
-          <h3>Weekly Availability</h3>
-          <div className="availability-grid">
-            {Object.entries(selectedTutor.profile.availability).map(([day, slots]) => (
-              <div key={day} className="day-slot">
-                <h4>{day}</h4>
-                {slots.map((s, i) => <div key={i} style={{ fontSize: '0.8rem' }}>{s}</div>)}
+        <div className="profile-layout">
+          <div className="profile-main">
+            <div className="profile-header">
+              <div className="profile-avatar">{t.avatar}</div>
+              <div className="profile-header-info">
+                <h2>{t.name}</h2>
+                <div className="tutor-card-rating" style={{ fontSize: '1rem' }}>
+                  <span className="stars">{'★'.repeat(Math.floor(t.rating))}</span>
+                  <span className="rating-value">{t.rating}</span>
+                  <span className="rating-count">· {t.total_sessions} sessions</span>
+                </div>
+                <div className="profile-stats-row">
+                  <div className="profile-stat">🕒 <strong>{t.profile.experience}</strong> experience</div>
+                  <div className="profile-stat">🌐 {t.profile.languages.join(', ')}</div>
+                </div>
               </div>
-            ))}
+            </div>
+
+            <div className="profile-section">
+              <h3>About</h3>
+              <p className="profile-bio">{t.profile.bio}</p>
+            </div>
+
+            <div className="profile-section">
+              <h3>Qualifications</h3>
+              <div className="qualification-list">
+                {t.profile.qualifications.map((q, i) => (
+                  <div key={i} className="qualification-item">
+                    <span className="check">✓</span>
+                    <span>{q}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="profile-section">
+              <h3>Subjects</h3>
+              <div className="tutor-card-tags">
+                {t.subjects.map(sid => (
+                  <span key={sid} className="tag tag-subject">{getSubjectIcon(sid)} {getSubjectName(sid)}</span>
+                ))}
+              </div>
+            </div>
+
+            {tReviews.length > 0 && (
+              <div className="profile-section reviews-section">
+                <h3>Student Reviews ({tReviews.length})</h3>
+                {tReviews.map(r => (
+                  <div key={r.id} className="review-card">
+                    <div className="review-header">
+                      <span className="review-author">{r.author}</span>
+                      <span className="review-stars">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                    </div>
+                    <p className="review-text">{r.comment}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <button className="btn" style={{ marginTop: '2rem' }} onClick={() => navigateToBooking(selectedTutor)}>Book a Session</button>
+
+          <div className="profile-sidebar">
+            <div className="sidebar-card">
+              <div className="price-display">${t.hourly_rate}<span>/hr</span></div>
+              <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: '1rem' }} onClick={() => setPage('book')}>
+                📅 Book a Session
+              </button>
+            </div>
+
+            <div className="sidebar-card">
+              <h3>📅 Weekly Availability</h3>
+              <div className="availability-grid">
+                {Object.entries(t.profile.availability).map(([day, slots]) => (
+                  <div key={day} className="day-slot">
+                    <span className="day-name">{day}</span>
+                    <div className="day-times">
+                      {slots.map((s, i) => <span key={i} className="time-badge">{s}</span>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
-  const renderBookingForm = () => (
-    <div className="animate-fade">
+  // ===== BOOKING FORM =====
+  const BookingPage = () => (
+    <div className="animate-in">
+      <div className="back-link" onClick={() => setPage(selectedTutor ? 'profile' : 'listing')}>← Back</div>
       <div className="form-container">
-        <h2>Book a Session with {selectedTutor.name}</h2>
+        <h2>Book a Session</h2>
+        <p className="form-subtitle">with {selectedTutor.name} · ${selectedTutor.hourly_rate}/hr</p>
         <form onSubmit={handleBooking}>
           <div className="form-group">
-            <label>Subject</label>
-            <select name="subject" required>
+            <label className="form-label">Subject</label>
+            <select name="subject" className="form-select" required>
               {selectedTutor.subjects.map(sid => (
-                <option key={sid} value={sid}>{SUBJECTS.find(s => s.id === sid).name}</option>
+                <option key={sid} value={sid}>{getSubjectIcon(sid)} {getSubjectName(sid)}</option>
               ))}
             </select>
           </div>
           <div className="form-group">
-            <label>Date</label>
-            <input type="date" name="date" required min="2026-04-01" />
+            <label className="form-label">Date</label>
+            <input type="date" name="date" className="form-input" required min="2026-04-01" />
           </div>
           <div className="form-group">
-            <label>Preferred Time Slot</label>
-            <select name="time" required>
-              <option value="10:00:00+00">10:00 AM - 11:00 AM</option>
-              <option value="14:00:00+00">02:00 PM - 03:00 PM</option>
-              <option value="16:00:00+00">04:00 PM - 05:00 PM</option>
+            <label className="form-label">Time Slot</label>
+            <select name="time" className="form-select" required>
+              <option value="09:00-10:00">09:00 AM – 10:00 AM</option>
+              <option value="10:00-11:00">10:00 AM – 11:00 AM</option>
+              <option value="11:00-12:00">11:00 AM – 12:00 PM</option>
+              <option value="14:00-15:00">02:00 PM – 03:00 PM</option>
+              <option value="15:00-16:00">03:00 PM – 04:00 PM</option>
+              <option value="16:00-17:00">04:00 PM – 05:00 PM</option>
+              <option value="18:00-19:00">06:00 PM – 07:00 PM</option>
             </select>
           </div>
-          <button type="submit" className="btn">Confirm Booking</button>
-          <button type="button" className="btn" style={{ background: 'transparent', marginTop: '1rem' }} onClick={() => setCurrentPage('listing')}>Cancel</button>
+          <button type="submit" className="btn btn-primary btn-full btn-lg" style={{ marginTop: '0.5rem' }}>Confirm Booking</button>
+          <button type="button" className="btn btn-secondary btn-full" style={{ marginTop: '0.75rem' }} onClick={() => setPage('listing')}>Cancel</button>
         </form>
       </div>
     </div>
   );
 
-  const renderDashboard = () => (
-    <div className="animate-fade">
-      <h2>Student Dashboard</h2>
-      <div style={{ marginTop: '2rem' }}>
-        <h3>Your Sessions</h3>
-        <table style={{ width: '100%', marginTop: '1rem', borderCollapse: 'collapse' }}>
+  // ===== DASHBOARD =====
+  const DashboardPage = () => {
+    const completedCount = sessions.filter(s => s.status === 'completed').length;
+    const upcomingCount = sessions.filter(s => s.status === 'confirmed' || s.status === 'pending').length;
+    const totalSpent = sessions.reduce((acc, s) => {
+      const tutor = TUTORS.find(t => t.id === s.tutor_id);
+      return acc + (tutor?.hourly_rate || 0);
+    }, 0);
+
+    return (
+      <div className="animate-in">
+        <div className="dashboard-header">
+          <h2>Student Dashboard</h2>
+        </div>
+
+        <div className="dashboard-stats">
+          <div className="dash-stat">
+            <div className="dash-stat-label">Completed Sessions</div>
+            <div className="dash-stat-value" style={{ color: '#34d399' }}>{completedCount}</div>
+          </div>
+          <div className="dash-stat">
+            <div className="dash-stat-label">Upcoming Sessions</div>
+            <div className="dash-stat-value" style={{ color: '#818cf8' }}>{upcomingCount}</div>
+          </div>
+          <div className="dash-stat">
+            <div className="dash-stat-label">Total Spent</div>
+            <div className="dash-stat-value">${totalSpent.toFixed(2)}</div>
+          </div>
+        </div>
+
+        <h3 className="section-title" style={{ marginBottom: '1rem' }}>Your Sessions</h3>
+        <table className="sessions-table">
           <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-              <th style={{ padding: '1rem' }}>Tutor</th>
-              <th style={{ padding: '1rem' }}>Subject</th>
-              <th style={{ padding: '1rem' }}>Time</th>
-              <th style={{ padding: '1rem' }}>Status</th>
-              <th style={{ padding: '1rem' }}>Action</th>
+            <tr>
+              <th>Tutor</th>
+              <th>Subject</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Status</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {sessions.map(s => {
-              const tutor = TUTORS.find(t => t.id === s.tutor_id);
-              const subject = SUBJECTS.find(sub => sub.id === s.subject_id);
-              return (
-                <tr key={s.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '1rem' }}>{tutor.name}</td>
-                  <td style={{ padding: '1rem' }}>{subject.name}</td>
-                  <td style={{ padding: '1rem' }}>{s.time_range}</td>
-                  <td style={{ padding: '1rem' }}>
-                    <span className="tag" style={{ background: s.status === 'confirmed' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)', color: s.status === 'confirmed' ? '#4ade80' : '#facc15' }}>
-                      {s.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '1rem' }}>
-                    {s.status === 'confirmed' && (
-                       <button className="btn" style={{ width: 'auto', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => { setSelectedTutor(tutor); setCurrentPage('review'); }}>Review</button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {sessions.map(s => (
+              <tr key={s.id}>
+                <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{getTutorName(s.tutor_id)}</td>
+                <td>{getSubjectIcon(s.subject_id)} {getSubjectName(s.subject_id)}</td>
+                <td>{s.date}</td>
+                <td>{s.start_time} – {s.end_time}</td>
+                <td>
+                  <span className={`status-badge status-${s.status}`}>{s.status}</span>
+                </td>
+                <td>
+                  {s.status === 'completed' && (
+                    <button className="btn btn-ghost" onClick={() => {
+                      setSelectedTutor(TUTORS.find(t => t.id === s.tutor_id));
+                      setPage('review');
+                    }}>Write Review</button>
+                  )}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
-    </div>
-  );
+    );
+  };
 
-  const renderReviewForm = () => (
-    <div className="animate-fade">
+  // ===== REVIEW FORM =====
+  const ReviewPage = () => (
+    <div className="animate-in">
+      <div className="back-link" onClick={() => setPage('dashboard')}>← Back to Dashboard</div>
       <div className="form-container">
-        <h2>Write a Review for {selectedTutor.name}</h2>
+        <h2>Rate Your Session</h2>
+        <p className="form-subtitle">with {selectedTutor.name}</p>
         <form onSubmit={handleReview}>
           <input type="hidden" name="session_id" value="s-1" />
           <div className="form-group">
-            <label>Rating (1-5)</label>
-            <select name="rating" required>
-              <option value="5">5 - Excellent</option>
-              <option value="4">4 - Very Good</option>
-              <option value="3">3 - Good</option>
-              <option value="2">2 - Fair</option>
-              <option value="1">1 - Poor</option>
-            </select>
+            <label className="form-label">Your Rating</label>
+            <div className="star-rating-input">
+              {[1, 2, 3, 4, 5].map(star => (
+                <button
+                  key={star}
+                  type="button"
+                  className={`star-btn ${star <= reviewRating ? 'active' : ''}`}
+                  onClick={() => setReviewRating(star)}
+                >★</button>
+              ))}
+            </div>
           </div>
           <div className="form-group">
-            <label>Your Feedback</label>
-            <textarea name="comment" rows="4" placeholder="How was your session?" required></textarea>
+            <label className="form-label">Your Feedback</label>
+            <textarea name="comment" className="form-textarea" placeholder="Share your experience with this tutor..." required />
           </div>
-          <button type="submit" className="btn">Submit Review</button>
+          <button type="submit" className="btn btn-primary btn-full btn-lg" style={{ marginTop: '0.5rem' }}>Submit Review</button>
         </form>
       </div>
     </div>
   );
 
+  // ===== RENDER =====
   return (
     <div className="app-container">
-      {renderNavbar()}
+      <Navbar />
       <main>
-        {currentPage === 'listing' && renderListing()}
-        {currentPage === 'profile' && renderProfile()}
-        {currentPage === 'book' && renderBookingForm()}
-        {currentPage === 'dashboard' && renderDashboard()}
-        {currentPage === 'review' && renderReviewForm()}
+        {page === 'listing' && <ListingPage />}
+        {page === 'profile' && selectedTutor && <ProfilePage />}
+        {page === 'book' && selectedTutor && <BookingPage />}
+        {page === 'dashboard' && <DashboardPage />}
+        {page === 'review' && selectedTutor && <ReviewPage />}
       </main>
-      <footer style={{ marginTop: '5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-        &copy; 2026 Tutorix Platform. Powered by PostgreSQL JSONB & React.
+      <footer className="footer">
+        &copy; 2026 Tutorix · Powered by PostgreSQL JSONB & React
       </footer>
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 };
